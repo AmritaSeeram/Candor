@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Candor | A study planner that admits what it doesn't know</title>
+<meta name="description" content="A design prototype of an AI study planner that shows confidence, states its assumptions, and lets people correct it.">
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--mute:#515154;--line:#d2d2d7;--acc:#0058c7;--ok:#1d6f3a;--warn:#8a5a00;--low:#a3262a}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--mute:#b0b0b8;--line:#3a3a3c;--acc:#6cb2ff;--ok:#6fdc8c;--warn:#ffc65c;--low:#ff8d91}}
+*{box-sizing:border-box}html{font-size:100%}body{margin:0;background:var(--bg);color:var(--ink);font:1rem/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:1.5rem 1.25rem 4rem}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem}h1{font-size:2rem;letter-spacing:-.02em;margin:0}
+h2{font-size:1.1rem;margin:0 0 .5rem}p{margin:.25rem 0 1rem;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:1.1rem 1.25rem;margin-top:1rem}
+button,.seg label{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;padding:.5rem 1rem;cursor:pointer}
+.seg{display:flex;gap:.5rem;flex-wrap:wrap;border:0;padding:0;margin:0}.seg input{position:absolute;opacity:0}
+.seg input:checked+label{border:2px solid var(--acc);color:var(--acc);font-weight:600}.seg input:focus-visible+label,button:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.seg label{display:inline-flex;align-items:center}legend{font-weight:600;float:left;width:100%;padding:0;margin-bottom:.6rem}legend+*{clear:left}fieldset.seg.card{padding:1.1rem 1.25rem;border:1px solid var(--line);margin:1rem 0 0;min-width:0}li.plan>span{flex:1 1 13rem}
+ul{padding-left:1.2rem;margin:.25rem 0}li{margin:.2rem 0}.meter{display:flex;align-items:center;gap:.6rem;font-weight:600}.dots{letter-spacing:.2em}
+.High{color:var(--ok)}.Medium{color:var(--warn)}.Low{color:var(--low)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.75rem 0;border-top:1px solid var(--line)}li.plan{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.4rem 0}ul.plan{padding:0}@media(max-width:560px){.row{flex-direction:column;align-items:flex-start}}.row:first-of-type{border-top:0}
+.tag{font-size:.85rem;color:var(--mute)}details{margin-top:.75rem;color:var(--mute)}summary{cursor:pointer;color:var(--ink);font-weight:600;min-height:44px;display:flex;align-items:center}
+.note{font-size:.9rem;color:var(--mute);margin-top:1.5rem}.sr{position:absolute;left:-9999px}
+@media(prefers-reduced-motion:no-preference){#out{animation:in .25s ease-out}@keyframes in{from{opacity:0;transform:translateY(6px)}}}
+</style></head><body><main>
+<header><h1>Candor</h1><div role="group" aria-label="Text size"><button id="dn" aria-label="Smaller text">A&minus;</button> <button id="up" aria-label="Larger text">A+</button></div></header>
+<p>A study planner that tells you how sure it is, shows what it assumed, and lets you correct it in one tap.</p>
+
+<fieldset class="seg card"><legend>What do you need to get done?</legend>
+<input type="radio" name="t" id="t1" value="Study for exam"><label for="t1">Study for exam</label>
+<input type="radio" name="t" id="t2" value="Write essay"><label for="t2">Write essay</label>
+<input type="radio" name="t" id="t3" value="Finish project"><label for="t3">Finish project</label></fieldset>
+<fieldset class="seg card"><legend>When is it due?</legend>
+<input type="radio" name="d" id="d1" value="1"><label for="d1">Tomorrow</label>
+<input type="radio" name="d" id="d2" value="5"><label for="d2">This week</label>
+<input type="radio" name="d" id="d3" value="10"><label for="d3">Next week</label></fieldset>
+
+<div id="out" aria-live="polite"></div>
+<p class="note">Prototype: plans come from simple scripted rules to test the interaction design, not from a live AI model.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const S={task:null,due:null,duration:null,focus:null,session:null,off:[]};
+const OPTS={duration:{label:"Time needed",def:"3 hours",vals:["1 hour","3 hours","6 hours"],map:{"1 hour":60,"3 hours":180,"6 hours":360}},
+ focus:{label:"Best focus time",def:"evenings",vals:["mornings","afternoons","evenings"],map:{mornings:"9:00 am",afternoons:"2:00 pm",evenings:"7:00 pm"}},
+ session:{label:"Session length",def:"50 min",vals:["25 min","50 min","90 min"],map:{"25 min":25,"50 min":50,"90 min":90}}};
+const val=k=>S[k]??OPTS[k].def;
+function plan(){const total=OPTS.duration.map[val("duration")],len=OPTS.session.map[val("session")],n=Math.ceil(total/len);
+ const days=[...Array(S.due).keys()].filter(i=>!S.off.includes(i));if(!days.length)return{days:[],len,n};
+ const per=Math.ceil(n/days.length);let left=n;
+ return{len,n,days:days.map(i=>{const k=Math.min(per,left);left-=k;return{i,k}}).filter(d=>d.k>0)};}
+function render(){if(!S.task||!S.due){$("out").innerHTML="";return}
+ const known=["duration","focus","session"].filter(k=>S[k]!==null).length,lvl=known>=3?"High":known===2?"Medium":"Low",f=known>=3?3:known===2?2:1,dots="●".repeat(f)+"○".repeat(3-f);
+ const why={Low:"I'm guessing three things. Confirm them below to sharpen this plan.",Medium:"I'm still guessing one thing.",High:"You've confirmed everything I was assuming."}[lvl];
+ const p=plan(),time=OPTS.focus.map[val("focus")];
+ let h=`<section class="card"><h2>${S.task}: suggested plan</h2>`;
+ if(!p.days.length)h+=`<p>No days left. Undo one below.</p>`;
+ else{h+=`<ul class="plan">${p.days.map(d=>`<li class="plan"><span>Day ${d.i+1}: ${d.k} &times; ${p.len} min, starting ${time}${d.k*p.len>240?` <span class="Low">Heads up: over 4 hours in one day.</span>`:""}</span> <button data-off="${d.i}" class="tag" aria-label="I can't do day ${d.i+1}">Can't do this day</button></li>`).join("")}</ul>`}
+ h+=`<div class="meter" style="margin-top:.75rem"><span>Confidence:</span><span class="${lvl}">${lvl} <span class="dots" aria-hidden="true">${dots}</span></span></div><p>${why}</p></section><section class="card"><h2>What I assumed</h2>`;
+ for(const k in OPTS){const o=OPTS[k],v=val(k),sure=S[k]!==null;
+  h+=`<div class="row"><div>${o.label}: <b>${v}</b><br><span class="tag">${sure?"You confirmed this":"I assumed this"}</span></div><div class="seg" role="group" aria-label="Set ${o.label}">${o.vals.map(x=>`<button data-k="${k}" data-v="${x}" aria-pressed="${S[k]===x}">${S[k]===x?"✓ ":""}${x}</button>`).join("")}</div></div>`}
+ h+=`</section>`;if(S.off.length)h+=`<section class="card"><p>Got it, I moved the work off day${S.off.length>1?"s":""} ${S.off.map(i=>i+1).join(", ")}. <button id="undo">Undo</button></p></section>`;
+ h+=`<details><summary>Why this plan?</summary><p>Your task is split into sessions and spread evenly across the days before it's due. Confidence rises only when you confirm an assumption, never on its own.</p></details>`;
+ $("out").innerHTML=h;}
+document.addEventListener("change",e=>{if(e.target.name==="t"){S.task=e.target.value;S.off=[];render()}if(e.target.name==="d"){S.due=+e.target.value;S.off=[];render()}});
+document.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+ if(b.dataset.k){S[b.dataset.k]=b.dataset.v;render();document.querySelector(`[data-k="${b.dataset.k}"][data-v="${b.dataset.v}"]`)?.focus()}
+ else if(b.dataset.off){S.off.push(+b.dataset.off);render()}
+ else if(b.id==="undo"){S.off.pop();render()}
+ else if(b.id==="up"||b.id==="dn"){const f=parseFloat(document.documentElement.style.fontSize)||100;document.documentElement.style.fontSize=Math.min(150,Math.max(85,f+(b.id==="up"?10:-10)))+"%"}});
+</script></body></html>
